@@ -26,37 +26,34 @@ jobs:
           megadl --path=game_files.zip "https://mega.nz/file/jTYDmRjA#DYkUcG8X3IQzV_0egKb9C6h9MriRK78DsvmTwgRGiYk"
           unzip -q game_files.zip -d ExtractedGame
 
-      - name: Reconstruct Native Project Directory
+      - name: Reconstruct Native Mobile Project Directory
         run: |
           # Create a clean Ren'Py project target structure
           mkdir -p SummertimeSaga/game
           
-          # Locate the true game folder from your uploaded zip
+          # Locate the true .app bundle directory path
           TARGET_APP=$(find ExtractedGame -maxdepth 2 -iname "summertimesaga.app" -print -quit)
           
-          # Copy EVERYTHING including hidden frameworks, libraries, and native modules
+          # Copy core game assets from the bundle layout
           if [ -d "$TARGET_APP/Contents/Resources/autorun/game" ]; then
             cp -R "$TARGET_APP/Contents/Resources/autorun/game/"* SummertimeSaga/game/
           elif [ -d "$TARGET_APP/Contents/Resources/game" ]; then
             cp -R "$TARGET_APP/Contents/Resources/game/"* SummertimeSaga/game/
-          else
-            find ExtractedGame -type d -name "game" -exec cp -R {}/* SummertimeSaga/game/ \;
           fi
-          
-          # Copy the core 'lib' folder structure which contains the necessary platform execution keys
-          if [ -d "$TARGET_APP/Contents/Resources/autorun/lib" ]; then
-            cp -R "$TARGET_APP/Contents/Resources/autorun/lib" SummertimeSaga/
-          elif [ -d "$TARGET_APP/Contents/Resources/lib" ]; then
-            cp -R "$TARGET_APP/Contents/Resources/lib" SummertimeSaga/
-          fi
+
+      - name: Extract Internal Mobile Python Modules
+        run: |
+          # Extract the game's actual native mobile frameworks from the compiled archives
+          # This pulls the true, uncompromised saga modules built for mobile systems
+          SDK_DIR=$(ls -d renpy-*-sdk)
+          python3 ./$SDK_DIR/renpy.py SummertimeSaga/ rpa extract
 
       - name: Generate Xcode Project
         run: |
-          # Dynamically locate the extracted renpy directory name and run with full developer permissions
           SDK_DIR=$(ls -d renpy-*-sdk)
           ./$SDK_DIR/renpy.sh SummertimeSaga/ ios generate
 
-      - name: Compile and Archive IPA
+      - name: Compile and Archive IPA via Xcode Engine
         run: |
           cd SummertimeSaga/ios-wwhw
           xcodebuild archive \
