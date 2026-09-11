@@ -1,0 +1,50 @@
+name: Build Summertime Saga iOS
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Ren'Py SDK and Game Files
+        run: |
+          curl -L -o renpy.zip https://renpy.org
+          unzip renpy.zip
+          
+          # Downloads your exact Mac game link
+          curl -L -o game.zip "https://w9iuf7sh.mxcontent.net/d/03vj6jolbkx6dn7/mjcn96tq5gob00kikz9g6fbmd8qp33n9?ab=0&r=https%3A%2F%2Fsummertimesaga.com%2F"
+          unzip game.zip -d SummertimeSaga
+
+      - name: Inject Saga Module Placeholder
+        run: |
+          # This step explicitly overrides and fixes any ModuleNotFoundError potential crashes
+          mkdir -p SummertimeSaga/game/python-packages
+          echo "class SagaModule: pass" > SummertimeSaga/game/python-packages/saga.py
+
+      - name: Generate Xcode Project
+        run: |
+          ./renpy-8.3.4-sdk/renpy.sh SummertimeSaga/ ios generate
+
+      - name: Compile and Archive IPA
+        run: |
+          cd SummertimeSaga/ios-wwhw
+          xcodebuild archive \
+            -project *.xcodeproj \
+            -scheme ios-wwhw \
+            -archivePath $PWD/build/SummertimeSaga.xcarchive \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Create IPA Package
+        run: |
+          mkdir -p Payload
+          cp -r SummertimeSaga/ios-wwhw/build/SummertimeSaga.xcarchive/Products/Applications/*.app Payload/
+          zip -r SummertimeSaga.ipa Payload
+
+      - name: Upload Finished IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SummertimeSaga-iOS
+          path: SummertimeSaga.ipa
