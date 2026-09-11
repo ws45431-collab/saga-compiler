@@ -1,64 +1,77 @@
-name: Build Working Summertime Saga IPA
+name: Build and Host Summertime Saga Web App
 on:
   workflow_dispatch:
 
+# Grant specific permissions to deploy an automated hosted page privately
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: ubuntu-latest # Uses an optimized Linux server (bypasses all Mac errors)
     steps:
       - name: Checkout Repository Code
         uses: actions/checkout@v4
 
-      - name: Install Megatools on Mac Cloud
+      - name: Set up Java Environment
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Megatools
         run: |
-          # Install megatools via Homebrew to handle secure MEGA downloads
-          brew install megatools
+          sudo apt-get update
+          sudo apt-get install -y megatools
 
       - name: Download Ren'Py SDK From MEGA
         run: |
-          # Pulls your exact bzip2 Ren'Py package from your MEGA link
+          # Pulls your exact Ren'Py package from your secure link
           megadl --path=renpy_sdk.tar.bz2 "https://mega.nz/file/WXBkERSY#_rqbt_cGSgfgVJQSNWKL9RGlZq4hgD8wz_Ox-nqBRoA"
           tar -xf renpy_sdk.tar.bz2
 
       - name: Download Game Files From MEGA
         run: |
-          # Pulls your exact game package from your MEGA link
+          # Pulls your exact game package from your secure link
           megadl --path=game_files.zip "https://mega.nz/file/jTYDmRjA#DYkUcG8X3IQzV_0egKb9C6h9MriRK78DsvmTwgRGiYk"
           unzip -q game_files.zip -d ExtractedGame
 
       - name: Reconstruct Native Project Directory
         run: |
-          # Create a clean Ren'Py project target structure
+          # Standardizes the game source framework folders
           mkdir -p SummertimeSaga/game
-          
-          # Locate the true .app bundle directory path
           TARGET_APP=$(find ExtractedGame -maxdepth 2 -iname "summertimesaga.app" -print -quit)
           
-          # Copy the game files cleanly out of the Mac application resources
           if [ -d "$TARGET_APP/Contents/Resources/autorun/game" ]; then
             cp -R "$TARGET_APP/Contents/Resources/autorun/game/"* SummertimeSaga/game/
           elif [ -d "$TARGET_APP/Contents/Resources/game" ]; then
             cp -R "$TARGET_APP/Contents/Resources/game/"* SummertimeSaga/game/
           fi
 
-      - name: Compile Full Playable iOS App Package
+      - name: Build Web Application Package
         run: |
-          # Dynamically locate the extracted renpy directory name
           SDK_DIR=$(ls -d renpy-*-sdk)
-          
-          # Execute the official distribution compilation tool.
-          # This forces Ren'Py to bypass local script validation loops and bundle the mobile assets.
-          ./$SDK_DIR/renpy.sh SummertimeSaga/ ios_build --destination $GITHUB_WORKSPACE/ios_out --no-sign
+          # Compiles the game code directly into stable browser WebAssembly (wasm)
+          ./$SDK_DIR/renpy.sh SummertimeSaga/ web_build --destination $GITHUB_WORKSPACE/web_out
 
-      - name: Package to Final IPA Archive
-        run: |
-          # Re-bundle the generated standalone app files into the standard iOS payload directory
-          mkdir -p Payload
-          cp -r ios_out/*.app Payload/
-          zip -r SummertimeSaga.ipa Payload
-
-      - name: Upload Finished IPA
-        uses: actions/upload-artifact@v4
+      - name: Upload Web Artifact Assets
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: SummertimeSaga-iOS-Working
-          path: SummertimeSaga.ipa
+          path: web_out/
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy Web App to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
