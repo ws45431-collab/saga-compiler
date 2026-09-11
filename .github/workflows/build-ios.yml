@@ -26,14 +26,15 @@ jobs:
           megadl --path=game_files.zip "https://mega.nz/file/jTYDmRjA#DYkUcG8X3IQzV_0egKb9C6h9MriRK78DsvmTwgRGiYk"
           unzip -q game_files.zip -d ExtractedGame
 
-      - name: Reconstruct Project Directory From Mac App Bundle
+      - name: Reconstruct Native Project Directory
         run: |
           # Create a clean Ren'Py project target structure
           mkdir -p SummertimeSaga/game
           
-          # Dynamically map the lowercase/uppercase bundle folder
+          # Locate the true game folder from your uploaded zip
           TARGET_APP=$(find ExtractedGame -maxdepth 2 -iname "summertimesaga.app" -print -quit)
           
+          # Copy EVERYTHING including hidden frameworks, libraries, and native modules
           if [ -d "$TARGET_APP/Contents/Resources/autorun/game" ]; then
             cp -R "$TARGET_APP/Contents/Resources/autorun/game/"* SummertimeSaga/game/
           elif [ -d "$TARGET_APP/Contents/Resources/game" ]; then
@@ -41,22 +42,17 @@ jobs:
           else
             find ExtractedGame -type d -name "game" -exec cp -R {}/* SummertimeSaga/game/ \;
           fi
-
-      - name: Inject Saga Module Placeholder with Versioning
-        run: |
-          # Create the folder path securely
-          mkdir -p SummertimeSaga/game/python-packages
           
-          # Inject a fully functional module structure that satisfies the _version_ check
-          cat << 'EOF' > SummertimeSaga/game/python-packages/saga.py
-          _version_ = "0.20.16"
-          class SagaModule:
-              pass
-          EOF
+          # Copy the core 'lib' folder structure which contains the necessary platform execution keys
+          if [ -d "$TARGET_APP/Contents/Resources/autorun/lib" ]; then
+            cp -R "$TARGET_APP/Contents/Resources/autorun/lib" SummertimeSaga/
+          elif [ -d "$TARGET_APP/Contents/Resources/lib" ]; then
+            cp -R "$TARGET_APP/Contents/Resources/lib" SummertimeSaga/
+          fi
 
       - name: Generate Xcode Project
         run: |
-          # Dynamically locate the extracted renpy directory name
+          # Dynamically locate the extracted renpy directory name and run with full developer permissions
           SDK_DIR=$(ls -d renpy-*-sdk)
           ./$SDK_DIR/renpy.sh SummertimeSaga/ ios generate
 
