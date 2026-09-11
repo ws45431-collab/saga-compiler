@@ -11,18 +11,18 @@ jobs:
 
       - name: Install Megatools on Mac Cloud
         run: |
-          # Install megatools via Homebrew to handle the secure MEGA download
+          # Install megatools via Homebrew to handle secure MEGA downloads
           brew install megatools
 
-      - name: Download Ren'Py SDK
+      - name: Download Ren'Py SDK From MEGA
         run: |
-          # Pull the stable universal package natively handled by Mac runners
-          curl -L -f -o renpy_sdk.tar.bz2 https://renpy.org
+          # Pulls your exact bzip2 Ren'Py package from your MEGA link
+          megadl --path=renpy_sdk.tar.bz2 "https://mega.nz/file/WXBkERSY#_rqbt_cGSgfgVJQSNWKL9RGlZq4hgD8wz_Ox-nqBRoA"
           tar -xf renpy_sdk.tar.bz2
 
       - name: Download Game Files From MEGA
         run: |
-          # Use megatools to securely pull and decrypt your exact file link
+          # Pulls your exact game package from your MEGA link
           megadl --path=game_files.zip "https://mega.nz/file/jTYDmRjA#DYkUcG8X3IQzV_0egKb9C6h9MriRK78DsvmTwgRGiYk"
           unzip -q game_files.zip -d ExtractedGame
 
@@ -31,7 +31,7 @@ jobs:
           # Create a clean Ren'Py project target structure
           mkdir -p SummertimeSaga/game
           
-          # Dynamically locate and handle the lowercase/uppercase naming bundle folder
+          # Dynamically map the lowercase/uppercase bundle folder
           TARGET_APP=$(find ExtractedGame -maxdepth 2 -iname "summertimesaga.app" -print -quit)
           
           if [ -d "$TARGET_APP/Contents/Resources/autorun/game" ]; then
@@ -44,12 +44,13 @@ jobs:
 
       - name: Inject Saga Module Placeholder
         run: |
-          # Overrides and fixes any ModuleNotFoundError engine conflicts
+          # Explicitly prevents ModuleNotFoundError crashes
           mkdir -p SummertimeSaga/game/python-packages
           echo "class SagaModule: pass" > SummertimeSaga/game/python-packages/saga.py
 
       - name: Generate Xcode Project
         run: |
+          # Dynamically locate the extracted renpy directory name
           SDK_DIR=$(ls -d renpy-*-sdk)
           ./$SDK_DIR/renpy.sh SummertimeSaga/ ios generate
 
