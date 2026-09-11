@@ -6,17 +6,24 @@ jobs:
   build:
     runs-on: macos-14
     steps:
-      - name: Checkout Repository
+      - name: Checkout Repository Code
         uses: actions/checkout@v4
 
-      - name: Download Ren'Py SDK and Game Files
+      - name: Install Megatools on Mac Cloud
         run: |
-          # Download the official universal tar.bz2 Mac/Linux package instead of the Windows exe
+          # Install megatools via Homebrew to handle the secure MEGA download
+          brew install megatools
+
+      - name: Download Ren'Py SDK
+        run: |
+          # Pull the stable universal package natively handled by Mac runners
           curl -L -f -o renpy_sdk.tar.bz2 https://renpy.org
           tar -xf renpy_sdk.tar.bz2
-          
-          # Download the game from your link
-          curl -L -f -o game_files.zip "https://w9iuf7sh.mxcontent.net/d/03vj6jolbkx6dn7/mjcn96tq5gob00kikz9g6fbmd8qp33n9?ab=0&r=https%3A%2F%2Fsummertimesaga.com%2F"
+
+      - name: Download Game Files From MEGA
+        run: |
+          # Use megatools to securely pull and decrypt your exact file link
+          megadl --path=game_files.zip "https://mega.nz/file/jTYDmRjA#DYkUcG8X3IQzV_0egKb9C6h9MriRK78DsvmTwgRGiYk"
           unzip -q game_files.zip -d ExtractedGame
 
       - name: Reconstruct Project Directory From Mac App Bundle
@@ -24,7 +31,7 @@ jobs:
           # Create a clean Ren'Py project target structure
           mkdir -p SummertimeSaga/game
           
-          # Find your extracted lowercase/uppercase .app bundle folder dynamically
+          # Dynamically locate and handle the lowercase/uppercase naming bundle folder
           TARGET_APP=$(find ExtractedGame -maxdepth 2 -iname "summertimesaga.app" -print -quit)
           
           if [ -d "$TARGET_APP/Contents/Resources/autorun/game" ]; then
@@ -32,13 +39,12 @@ jobs:
           elif [ -d "$TARGET_APP/Contents/Resources/game" ]; then
             cp -R "$TARGET_APP/Contents/Resources/game/"* SummertimeSaga/game/
           else
-            # Deep search fallback for variants
             find ExtractedGame -type d -name "game" -exec cp -R {}/* SummertimeSaga/game/ \;
           fi
 
       - name: Inject Saga Module Placeholder
         run: |
-          # Explicitly prevents ModuleNotFoundError crashes
+          # Overrides and fixes any ModuleNotFoundError engine conflicts
           mkdir -p SummertimeSaga/game/python-packages
           echo "class SagaModule: pass" > SummertimeSaga/game/python-packages/saga.py
 
