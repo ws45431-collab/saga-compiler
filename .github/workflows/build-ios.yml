@@ -1,0 +1,69 @@
+name: Build Summertime Saga iOS
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Ren'Py SDK and Game Files
+        run: |
+          # Download the official universal tar.bz2 Mac/Linux package instead of the Windows exe
+          curl -L -f -o renpy_sdk.tar.bz2 https://renpy.org
+          tar -xf renpy_sdk.tar.bz2
+          
+          # Download the game from your link
+          curl -L -f -o game_files.zip "https://w9iuf7sh.mxcontent.net/d/03vj6jolbkx6dn7/mjcn96tq5gob00kikz9g6fbmd8qp33n9?ab=0&r=https%3A%2F%2Fsummertimesaga.com%2F"
+          unzip -q game_files.zip -d ExtractedGame
+
+      - name: Reconstruct Project Directory From Mac App Bundle
+        run: |
+          # Create a clean Ren'Py project target structure
+          mkdir -p SummertimeSaga/game
+          
+          # Find your extracted lowercase/uppercase .app bundle folder dynamically
+          TARGET_APP=$(find ExtractedGame -maxdepth 2 -iname "summertimesaga.app" -print -quit)
+          
+          if [ -d "$TARGET_APP/Contents/Resources/autorun/game" ]; then
+            cp -R "$TARGET_APP/Contents/Resources/autorun/game/"* SummertimeSaga/game/
+          elif [ -d "$TARGET_APP/Contents/Resources/game" ]; then
+            cp -R "$TARGET_APP/Contents/Resources/game/"* SummertimeSaga/game/
+          else
+            # Deep search fallback for variants
+            find ExtractedGame -type d -name "game" -exec cp -R {}/* SummertimeSaga/game/ \;
+          fi
+
+      - name: Inject Saga Module Placeholder
+        run: |
+          # Explicitly prevents ModuleNotFoundError crashes
+          mkdir -p SummertimeSaga/game/python-packages
+          echo "class SagaModule: pass" > SummertimeSaga/game/python-packages/saga.py
+
+      - name: Generate Xcode Project
+        run: |
+          SDK_DIR=$(ls -d renpy-*-sdk)
+          ./$SDK_DIR/renpy.sh SummertimeSaga/ ios generate
+
+      - name: Compile and Archive IPA
+        run: |
+          cd SummertimeSaga/ios-wwhw
+          xcodebuild archive \
+            -project *.xcodeproj \
+            -scheme ios-wwhw \
+            -archivePath $PWD/build/SummertimeSaga.xcarchive \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Create IPA Package
+        run: |
+          mkdir -p Payload
+          cp -r SummertimeSaga/ios-wwhw/build/SummertimeSaga.xcarchive/Products/Applications/*.app Payload/
+          zip -r SummertimeSaga.ipa Payload
+
+      - name: Upload Finished IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SummertimeSaga-iOS
+          path: SummertimeSaga.ipa
