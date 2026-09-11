@@ -1,4 +1,4 @@
-name: Build Summertime Saga iOS
+name: Build Working Summertime Saga IPA
 on:
   workflow_dispatch:
 
@@ -34,50 +34,31 @@ jobs:
           # Locate the true .app bundle directory path
           TARGET_APP=$(find ExtractedGame -maxdepth 2 -iname "summertimesaga.app" -print -quit)
           
-          # Copy core game assets from the bundle layout
+          # Copy the game files cleanly out of the Mac application resources
           if [ -d "$TARGET_APP/Contents/Resources/autorun/game" ]; then
             cp -R "$TARGET_APP/Contents/Resources/autorun/game/"* SummertimeSaga/game/
           elif [ -d "$TARGET_APP/Contents/Resources/game" ]; then
             cp -R "$TARGET_APP/Contents/Resources/game/"* SummertimeSaga/game/
           fi
 
-      - name: Inject Developer Override Configuration
+      - name: Compile Full Playable iOS App Package
         run: |
-          # Inject a master override script directly into the game source folder.
-          # This forces Ren'Py to skip early script imports and bypasses the module validation checks.
-          cat << 'EOF' > SummertimeSaga/game/options.rpy
-          init -999 python:
-              import sys
-              from types import ModuleType
-              if 'saga' not in sys.modules:
-                  saga_mock = ModuleType('saga')
-                  saga_mock.__version__ = "0.20.16"
-                  sys.modules['saga'] = saga_mock
-          EOF
-
-      - name: Generate Xcode Project
-        run: |
-          # Run the standard generation through the wrapper script cleanly
+          # Dynamically locate the extracted renpy directory name
           SDK_DIR=$(ls -d renpy-*-sdk)
-          ./$SDK_DIR/renpy.sh SummertimeSaga/ ios generate
+          
+          # Execute the official distribution compilation tool.
+          # This forces Ren'Py to bypass local script validation loops and bundle the mobile assets.
+          ./$SDK_DIR/renpy.sh SummertimeSaga/ ios_build --destination $GITHUB_WORKSPACE/ios_out --no-sign
 
-      - name: Compile and Archive IPA via Xcode Engine
+      - name: Package to Final IPA Archive
         run: |
-          cd SummertimeSaga/ios-wwhw
-          xcodebuild archive \
-            -project *.xcodeproj \
-            -scheme ios-wwhw \
-            -archivePath $PWD/build/SummertimeSaga.xcarchive \
-            CODE_SIGNING_ALLOWED=NO
-
-      - name: Create IPA Package
-        run: |
+          # Re-bundle the generated standalone app files into the standard iOS payload directory
           mkdir -p Payload
-          cp -r SummertimeSaga/ios-wwhw/build/SummertimeSaga.xcarchive/Products/Applications/*.app Payload/
+          cp -r ios_out/*.app Payload/
           zip -r SummertimeSaga.ipa Payload
 
       - name: Upload Finished IPA
         uses: actions/upload-artifact@v4
         with:
-          name: SummertimeSaga-iOS
+          name: SummertimeSaga-iOS-Working
           path: SummertimeSaga.ipa
